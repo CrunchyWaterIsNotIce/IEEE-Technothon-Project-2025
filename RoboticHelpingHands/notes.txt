@@ -5,3 +5,4 @@ Little notes for ESP32
 [When Powering ESP32 Externally]
 -Make sure power supply is >5V
 -Use VIN PIN for Powering
+-Remove Serial Baut as it's not needed
