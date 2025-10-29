@@ -30,12 +30,14 @@ bool ServoController::attach(int pin, int timer, int angle, bool to_attach) {
 }
 
 void ServoController::safe_servo_write(int angle) {
-    if (!_isAttached) return;
+    // if (!_isAttached) return;
 
     _currentAngle = constrain(angle, 0, 180); // min-max 0-180 degrees for SG90
     _servo.write(_currentAngle);
 }
 
 int ServoController::get_current_angle() {
+    // if (!_isAttached) return;
+    
     return _currentAngle;
 }
