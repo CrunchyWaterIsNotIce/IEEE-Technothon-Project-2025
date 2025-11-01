@@ -3,82 +3,90 @@
 #include <ESP32Servo.h>
 #include <SparkFun_APDS9960.h>
 
-#define INTERUPT_PIN_APDS 5
 SparkFun_APDS9960 gesture_sensor = SparkFun_APDS9960();
-volatile bool isr_flag = false;
 
-void handleGesture();
-void interruptRoutine();
-void handleProxRGB();
+// found in SparkFun_APDS9960.h
+#define APDS9960_PDATA   0x9C  // proximity data register
+#define APDS9960_GFLVL   0xAE  // FIFO level, how much data is waiting
+#define APDS9960_GFIFO_U 0xFC  // FIFO UP value
+#define APDS9960_GFIFO_D 0xFD  // FIFO DOWN value
+#define APDS9960_GFIFO_L 0xFE  // FIFO LEFT value
+#define APDS9960_GFIFO_R 0xFF  // FIFO RIGHT value
+
+bool readRegister(uint8_t, uint8_t&);
+void handleTrainingData();
 
 void setup() {
   // Initializes serial port number for Serial Monitor
   Serial.begin(115200);
+
+  // Initializes wires to I2C pins w/ fast speed (to keep I2C stable)
+  Wire.begin(21, 22, 100000);
   
-  attachInterrupt(INTERUPT_PIN_APDS, interruptRoutine, FALLING);
-  if (gesture_sensor.init()) Serial.println("apds is initialized");
+  if (gesture_sensor.init()) Serial.println("apds is initialized"); // initializes sensor
   else Serial.println("apds failed to initialize");
 
-  if (gesture_sensor.enableProximitySensor(true)) Serial.println("proxmity is initialized");
-  else Serial.println("gesture failed to initialize");
+  // Tunes sensors down to stop saturation, default is too high
+  gesture_sensor.setGestureGain(GGAIN_2X);
+  gesture_sensor.setGestureLEDDrive(LED_DRIVE_25MA);
 
-  if (gesture_sensor.enableLightSensor(true)) Serial.println("rgb is initialized");
+  if (gesture_sensor.enableGestureSensor(false)) Serial.println("gesture is initialized"); // initializes gesture
   else Serial.println("gesture failed to initialize");
-
-  // if (gesture_sensor.enableGestureSensor(true)) Serial.println("gesture is initialized");
-  // else Serial.println("gesture failed to initialize");
 }
 
 void loop() {
-  if (isr_flag) {
-    isr_flag = false;
-    handleProxRGB();
-    // handleGesture();
-  }
+  handleTrainingData();
   delay(50);
 }
 
-void handleProxRGB() {
-  uint8_t proximity;
-  uint16_t r, g, b;
-  gesture_sensor.readProximity(proximity);
-  gesture_sensor.readBlueLight(r);
-  gesture_sensor.readGreenLight(g);
-  gesture_sensor.readRedLight(b);
 
-  Serial.printf("%u, %u, %u, %u\n", proximity, r, g, b);
+bool readRegister(uint8_t reg, uint8_t &val) {
+  Wire.beginTransmission(APDS9960_I2C_ADDR);
+  Wire.write(reg);
+  if (Wire.endTransmission(false) != 0) { // no transmission sends a restart
+    return false; // sensor ACK error
+  }
 
-  gesture_sensor.clearProximityInt();
-  gesture_sensor.clearAmbientLightInt();
+  Wire.requestFrom((uint8_t)APDS9960_I2C_ADDR, (uint8_t)1);
+
+  if (Wire.available()) {
+    val = Wire.read();
+    return true;
+  }
+  return false;
 }
 
-// void handleGesture() {
-//   if (gesture_sensor.isGestureAvailable()) {
-//     switch (gesture_sensor.readGesture()) {
-//       case DIR_UP:
-//         Serial.println("swiped UP");
-//         break;
-//       case DIR_DOWN:
-//         Serial.println("swiped DOWN");
-//         break;
-//       case DIR_LEFT:
-//         Serial.println("swiped LEFT");
-//         break;
-//       case DIR_RIGHT:
-//         Serial.println("swiped RIGHT");
-//         break;
-//       case DIR_FAR:
-//         Serial.println("swiped FAR");
-//         break;
-//       case DIR_NEAR:
-//         Serial.println("swiped NEAR");
-//         break;
-//       default:
-//         Serial.println("none");
-//     }
-//   }
-// }
+void handleTrainingData() {
+  uint8_t fifo_level = 0;
+  uint8_t prox_val = 0;
+  uint8_t u_val, d_val, l_val, r_val;
 
-void interruptRoutine() {
-  isr_flag = true;
+  if ( !readRegister(APDS9960_PDATA, prox_val) ) {
+    Serial.println("Error reading proximity");
+    return;
+  }
+  
+  if ( !readRegister(APDS9960_GFLVL, fifo_level) ) {
+    Serial.println("Error reading FIFO level");
+    return;
+  }
+
+  if ( fifo_level > 0 ) {
+    
+    for ( int i = 0; i < fifo_level; i++ ) { // drain FIFO
+      
+      if (!readRegister(APDS9960_GFIFO_U, u_val) ||
+          !readRegister(APDS9960_GFIFO_D, d_val) ||
+          !readRegister(APDS9960_GFIFO_L, l_val) ||
+          !readRegister(APDS9960_GFIFO_R, r_val) 
+        ) {
+        Serial.println("Error reading FIFO data");
+        break; 
+      }
+      
+      // proximity, up, down, left, right
+      Serial.printf("%u,%u,%u,%u,%u\n", prox_val, u_val, d_val, l_val, r_val);
+    }
+  }
+
 }
