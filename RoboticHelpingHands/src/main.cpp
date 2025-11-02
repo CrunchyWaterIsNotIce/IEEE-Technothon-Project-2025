@@ -50,7 +50,7 @@ void loop() {
       while(Serial.available() > 0) Serial.read();
 
       Serial.println();
-      Serial.printf("Now recording gesture, %s, for 2 seconds in...\n", NAME_OF_GESTURE);
+      Serial.printf("Now recording gesture [%s] for 2 seconds in...\n", NAME_OF_GESTURE);
       for (int countdown = 3; countdown > 0; countdown--) {
         Serial.printf("%d\n", countdown);
         delay(1000);
@@ -78,6 +78,7 @@ void loop() {
       }
 
       Serial.println();
+      Serial.println("Finished current recording.");
       Serial.print("Press ~ to rerun recording: ");
     }
   }
@@ -107,30 +108,31 @@ void handleTrainingData() {
 
   if ( !readRegister(APDS9960_PDATA, prox_val) ) {
     Serial.println("Error reading proximity");
-    return;
+    prox_val = 0;
   }
   
   if ( !readRegister(APDS9960_GFLVL, fifo_level) ) {
     Serial.println("Error reading FIFO level");
-    return;
+    fifo_level = 0;
   }
 
   if ( fifo_level > 0 ) {
-    
-    for ( int i = 0; i < fifo_level; i++ ) { // drain FIFO
-      
-      if (!readRegister(APDS9960_GFIFO_U, u_val) ||
-          !readRegister(APDS9960_GFIFO_D, d_val) ||
-          !readRegister(APDS9960_GFIFO_L, l_val) ||
-          !readRegister(APDS9960_GFIFO_R, r_val) 
-        ) {
-        Serial.println("Error reading FIFO data");
-        break; 
-      }
-      
-      // proximity, up, down, left, right
-      Serial.printf("%u,%u,%u,%u,%u\n", prox_val, u_val, d_val, l_val, r_val);
+    if (!readRegister(APDS9960_GFIFO_U, u_val) ||
+        !readRegister(APDS9960_GFIFO_D, d_val) ||
+        !readRegister(APDS9960_GFIFO_L, l_val) ||
+        !readRegister(APDS9960_GFIFO_R, r_val)
+      ) { // reads only ONE set of fifos
+      Serial.println("Error reading FIFO data");
+      u_val = d_val = l_val = r_val = 0; // uses zeros if FIFO is empty
+    }
+
+    for (int i = 1; i < fifo_level; i++) { // drains REMAINING FIFO
+      uint8_t dummy;
+      readRegister(APDS9960_GFIFO_U, dummy);
+      readRegister(APDS9960_GFIFO_D, dummy);
+      readRegister(APDS9960_GFIFO_L, dummy);
+      readRegister(APDS9960_GFIFO_R, dummy);
     }
   }
-
+  Serial.printf("%u,%u,%u,%u,%u\n", prox_val, u_val, d_val, l_val, r_val);
 }

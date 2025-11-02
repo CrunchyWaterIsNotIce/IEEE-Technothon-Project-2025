@@ -1,8 +1,15 @@
 import serial
 import time
 import sys
+import csv
+
 SERIAL_PORT = 'COM3'
 BAUD_RATE = 115200
+
+raw_data_filename = ""
+raw_data = []
+reading_raw_data = False
+count = 1
  
 try:
     ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.01)
@@ -22,10 +29,29 @@ try:
                 if line:
                     print(line)
                     
-                    if "Press ~ to " in line:
-                        user_input = input()
-                        ser.write(user_input.encode())
-                        ser.flush() # data is sent immediately, needed
+                    if not reading_raw_data:
+                        if "Now recording gesture" in line: # initializes gesture .csv file name
+                            raw_data_filename = line[line.index('[') + 1: line.index(']')] + f'_{count}.csv'
+                        if "proximity" in line: # prepares to record data from serial
+                            raw_data.append(line.split(','))
+                            reading_raw_data = True
+                        if "Press ~ to " in line: # toggles recording from python input
+                            user_input = input()
+                            ser.write(user_input.encode())
+                            # ser.flush()                           
+                    else:
+                        if "Finished current recording." in line: # creates and write on gesture .csv
+                            with open(raw_data_filename, mode='w', newline='') as file:
+                                writer = csv.writer(file)
+                                writer.writerows(raw_data)
+                            
+                            raw_data_filename = ""
+                            raw_data.clear()
+                            reading_raw_data = False
+                            count += 1
+                        else: # adds list data to list raw_data
+                            raw_data.append(line.split(','))
+                            
             except UnicodeDecodeError:
                 # skips invalid characters
                 pass
