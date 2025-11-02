@@ -19,7 +19,7 @@ except serial.SerialException as e:
     print(f'--- Error opening serial port: {e} ---')
     sys.exit(1)
 
-try:
+try:  
     while True:
         # reads all available data immediately without blocking (prior attempt)
         if ser.in_waiting > 0:
@@ -38,7 +38,7 @@ try:
                         if "Press ~ to " in line: # toggles recording from python input
                             user_input = input()
                             ser.write(user_input.encode())
-                            # ser.flush()                           
+                            ser.flush()                           
                     else:
                         if "Finished current recording." in line: # creates and write on gesture .csv
                             with open(raw_data_filename, mode='w', newline='') as file:

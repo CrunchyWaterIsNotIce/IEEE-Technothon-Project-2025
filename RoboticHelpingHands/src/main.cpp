@@ -14,7 +14,7 @@ SparkFun_APDS9960 gesture_sensor = SparkFun_APDS9960();
 #define APDS9960_GFIFO_R 0xFF  // FIFO RIGHT value
 
 const int SAMPLE_TIME = 2000; // 2 s
-const String NAME_OF_GESTURE = "double_shake";
+const String NAME_OF_GESTURE = "double_tap";
 const int SAMPLE_DELAY = 50; // 50 ms
 const int NUM_SAMPLES = SAMPLE_TIME / SAMPLE_DELAY;
 
