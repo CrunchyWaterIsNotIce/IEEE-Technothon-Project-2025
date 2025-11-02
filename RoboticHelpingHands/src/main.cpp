@@ -44,31 +44,42 @@ void setup() {
 
 void loop() {
   if (Serial.available() > 0) {
-    String uin = Serial.readString();
-    if ((uin.length() == 0) || (uin.indexOf('~') == -1)) {
-      while(Serial.available() > 0) Serial.read(); // flushes input
-      return; 
-    }
+    char c = Serial.read();
 
-    Serial.println();
-    Serial.printf("Now recording gesture, %s, for 2 seconds in...\n", NAME_OF_GESTURE);
-    for (int countdown = 3; countdown > 0; countdown--) {
-      Serial.printf("%d\n", countdown);
+    if (c == '~') {
+      while(Serial.available() > 0) Serial.read();
+
+      Serial.println();
+      Serial.printf("Now recording gesture, %s, for 2 seconds in...\n", NAME_OF_GESTURE);
+      for (int countdown = 3; countdown > 0; countdown--) {
+        Serial.printf("%d\n", countdown);
+        delay(1000);
+      }
+      Serial.println("GO");
       delay(1000);
+
+      Serial.println();
+      Serial.println("proximity,up,down,left,right");
+      // for (int n = 0; n < NUM_SAMPLES; n++) {
+      //   handleTrainingData();
+      //   delay(SAMPLE_DELAY);
+      // }
+
+      // uses non-blocking timing from arduino, no delays except for sampling rate
+      unsigned long startTime = millis();
+      int sampleCount = 0;
+      
+      while (sampleCount < NUM_SAMPLES) {
+        handleTrainingData();
+        sampleCount++;
+        
+        unsigned long targetTime = startTime + (sampleCount * SAMPLE_DELAY);
+        while (millis() < targetTime) {}
+      }
+
+      Serial.println();
+      Serial.print("Press ~ to rerun recording: ");
     }
-    Serial.println("GO");
-    delay(1000);
-
-    Serial.println();
-    Serial.println("proximity,up,down,left,right");
-    for (int n = 0; n < NUM_SAMPLES; n++) {
-      handleTrainingData();
-      delay(SAMPLE_DELAY);
-    }
-
-    Serial.println();
-    Serial.print("Press ~ to rerun recording: ");
-
   }
 }
 

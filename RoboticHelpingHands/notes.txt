@@ -9,3 +9,8 @@ Little notes
 
 [APDS9960 Sensor]
 -0x9E FOR HILETGO, editted in header and source file of SparkFun_APDS9960 Library
+
+[Training/Serial reading from python]
+-Doesn't use INTERRUPT PIN and instead uses polling
+-Polling comes with Uses pull-up resistors for I2C
+-Make sure no delays between accessing serial through .py and in gesture logic
