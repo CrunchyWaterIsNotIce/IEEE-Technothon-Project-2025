@@ -13,6 +13,11 @@ SparkFun_APDS9960 gesture_sensor = SparkFun_APDS9960();
 #define APDS9960_GFIFO_L 0xFE  // FIFO LEFT value
 #define APDS9960_GFIFO_R 0xFF  // FIFO RIGHT value
 
+const int SAMPLE_TIME = 2000; // 2 s
+const String NAME_OF_GESTURE = "double_shake";
+const int SAMPLE_DELAY = 50; // 50 ms
+const int NUM_SAMPLES = SAMPLE_TIME / SAMPLE_DELAY;
+
 bool readRegister(uint8_t, uint8_t&);
 void handleTrainingData();
 
@@ -32,11 +37,39 @@ void setup() {
 
   if (gesture_sensor.enableGestureSensor(false)) Serial.println("gesture is initialized"); // initializes gesture
   else Serial.println("gesture failed to initialize");
+
+  // Prompts custom gesture
+  Serial.print("Press ~ to run record custom gesture: ");
 }
 
 void loop() {
-  handleTrainingData();
-  delay(50);
+  if (Serial.available() > 0) {
+    String uin = Serial.readString();
+    if ((uin.length() == 0) || (uin.indexOf('~') == -1)) {
+      while(Serial.available() > 0) Serial.read(); // flushes input
+      return; 
+    }
+
+    Serial.println();
+    Serial.printf("Now recording gesture, %s, for 2 seconds in...\n", NAME_OF_GESTURE);
+    for (int countdown = 3; countdown > 0; countdown--) {
+      Serial.printf("%d\n", countdown);
+      delay(1000);
+    }
+    Serial.println("GO");
+    delay(1000);
+
+    Serial.println();
+    Serial.println("proximity,up,down,left,right");
+    for (int n = 0; n < NUM_SAMPLES; n++) {
+      handleTrainingData();
+      delay(SAMPLE_DELAY);
+    }
+
+    Serial.println();
+    Serial.print("Press ~ to rerun recording: ");
+
+  }
 }
 
 
