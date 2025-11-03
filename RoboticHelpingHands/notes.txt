@@ -14,3 +14,10 @@ Little notes
 -Doesn't use INTERRUPT PIN and instead uses polling
 -Polling comes with Uses pull-up resistors for I2C
 -Make sure no delays between accessing serial through .py and in gesture logic
+
+-double_shake; start with bottom of fist facing sensor, and twisting wrist towards sensor twice
+-double_tap; loose fist and is 'double' tapped/shaken towards sensor
+-palm_down; starts with loose fist palm up far from sensor and moves from while twisting up palm down
+-palm_up; starts with loose fist palm down close to sensor and moves back while twisting up palm up
+-swipe_inward; hand starts from the outside of the sensor and swipes in
+-swipe_outward; hand start from the inside of the sensor and swipes out
