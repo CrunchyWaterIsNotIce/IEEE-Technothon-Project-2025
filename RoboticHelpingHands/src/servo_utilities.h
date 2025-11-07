@@ -1,6 +1,7 @@
 #ifndef SERVO_UTILITIES_H
 #define SERVO_UTILITIES_H
 
+#include <array>
 #include <Arduino.h>
 #include <ESP32Servo.h>
 
@@ -12,13 +13,15 @@ public:
      * @brief   initializes servo motor properties for attachment
      * @param[in]   pin: SIGNAL pin
      * @param[in]   timer: allocated timer number
-     * @param[in]   angle: angle to initially set servo gear
      * @param[in]   to_attach: marks servo as attached or not
+     * @param[in]   angle: angle to initially set servo gear
+     * @param[in]   boundary: angle boundaries of start and end
      * @returns successful attachment of servo
      */
-    bool attach(int pin, int timer, int angle, bool to_attach);
+    bool attach(int pin, int timer, bool to_attach, int angle, std::array<int, 2> boundary);
+    
     /**
-     * @brief   writes servo angle within acceptable bounds of 0-180 degrees
+     * @brief   writes servo angle within acceptable bounds of set boundary
      * @param[in]   angle: angle to move servo gear
      * @returns none
      */
@@ -37,6 +40,7 @@ private:
     int _timerNum;
     int _currentAngle;
     bool _isAttached;
+    std::array<int, 2> _boundaries;
 };
 
 #endif

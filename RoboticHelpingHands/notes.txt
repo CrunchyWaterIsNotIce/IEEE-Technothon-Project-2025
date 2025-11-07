@@ -9,6 +9,11 @@ Little notes
 
 [APDS9960 Sensor]
 -0x9E FOR HILETGO, editted in header and source file of SparkFun_APDS9960 Library
+-TO RECONFIGURE SPARKFUN LIBRARY TO ACCEPT 2 BUS, OUTLINED
+-Add in header:
+    SparkFun_APDS9960(TwoWire *wire); -> under public class definition
+    TwoWire *_wire; -> under private class definition
+    
 
 [Training/Serial reading from python]
 -Doesn't use INTERRUPT PIN and instead uses polling
