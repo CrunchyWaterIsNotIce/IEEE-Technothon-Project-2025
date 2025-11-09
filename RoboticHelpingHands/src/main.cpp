@@ -6,7 +6,7 @@
 
 #include "servo_utilities.h"
 
-// Gesture Sensor Properties
+// Gesture Sensor Properties 
 TwoWire I2C_left = TwoWire(0);
 TwoWire I2C_right = TwoWire(1);
 
@@ -31,71 +31,308 @@ ServoController servo_cross;
 ServoController servo_left;
 ServoController servo_right;
 
-// Function Declarations
+// Control state machine
+enum ControlState {
+  STATE_DIRECT = 0,      // normal
+  STATE_SELECT_SERVO,    // selecting which servo to control
+  STATE_ADJUST_SERVO     // adjusting selected servo
+};
 
-/* Gesture Sensors */
+volatile ControlState control_state = STATE_DIRECT;
+int selected_servo_index = -1;
+
+constexpr int SERVO_COUNT = 5;
+ServoController* servoRefs[SERVO_COUNT] = { &servo_base, &servo_middle, &servo_cross, &servo_left, &servo_right };
+const char* servoLabels[SERVO_COUNT] = { "BASE", "MIDDLE", "CROSS", "LEFT", "RIGHT" };
+const int SERVO_STEP_DEGREES = 5;
+
+// Task handles
+TaskHandle_t gestureTaskHandle = NULL;
+TaskHandle_t servoTaskHandle = NULL;
+
+// Gesture queue
+QueueHandle_t gestureQueue; 
+struct GestureEvent {
+  int gesture;
+  bool isLeft;
+};
+
+// Function Declarations
 void apdsInitialization();
+void servoInitialization();
 void handleGesture(int gesture, const char* sensor_name);
 int readGestureNonBlocking(SparkFun_APDS9960& apds);
+void moveHorizontalArm(String direction);
 
-/* Servos */
-void servoInitialization();
+// FreeRTOS Tasks
+void gestureTask(void *parameter);
+void servoTask(void *parameter);
+
+// State machine functions
+void advanceControlState();
+void announceSelectedServo();
+void handleDirectGesture(const GestureEvent& event);
+void handleSelectionGesture(int gesture);
+void handleAdjustGesture(int gesture);
 
 void setup() {
-  // Initializes serial port number for Serial Monitor
   Serial.begin(115200);
- 
+  
+  // queue for gesture events
+  gestureQueue = xQueueCreate(1, sizeof(GestureEvent));
+  
   apdsInitialization();
-  // servoInitialization();
+  servoInitialization();
 
-  delay(4000);
+  delay(2000);
+  
+  // gesture task on core 0 (high priority for I2C)
+  xTaskCreatePinnedToCore(
+    gestureTask,
+    "GestureTask",
+    4096,
+    NULL,
+    2,
+    &gestureTaskHandle,
+    0
+  );
+  
+  // servo task on core 1 (lower priority)
+  xTaskCreatePinnedToCore(
+    servoTask,
+    "ServoTask",
+    4096,
+    NULL,
+    1,
+    &servoTaskHandle,
+    1
+  );
+  
+  Serial.println("Initialized both APDS and Servo on separate cores.");
+  Serial.println("\n=== CONTROL MODES ===");
+  Serial.println("DIRECT MODE: Swipe gestures control arm");
+  Serial.println("Cover both sensors: Enter servo selection mode");
 }
 
 void loop() {
-  // servo_base.safe_servo_write(0);
-  // servo_middle.safe_servo_write(0);
-  // servo_cross.safe_servo_write(0);
-  // servo_left.safe_servo_write(0);
-  // servo_right.safe_servo_write(0);
+  vTaskDelay(pdMS_TO_TICKS(100));
+}
 
-  int left_gesture = DIR_NONE;
-  int right_gesture = DIR_NONE;
+// Task 1: reading gestures (core 0)
+void gestureTask(void *parameter) {
+  static unsigned long lastStateChange = 0;
+  const unsigned long STATE_CHANGE_DEBOUNCE = 1000; // 1 second between state changes
   
-  if (left_apds.isGestureAvailable()) {
-    left_gesture = readGestureNonBlocking(left_apds);
-  }
-  
-  if (right_apds.isGestureAvailable()) {
-    right_gesture = readGestureNonBlocking(right_apds);
-  }
-  
-  // Handle gestures from both sensors
-  if (left_gesture != DIR_NONE && left_gesture != -1) {
-    handleGesture(left_gesture, "LEFT");
-  }
-  
-  if (right_gesture != DIR_NONE && right_gesture != -1) {
-    handleGesture(right_gesture, "RIGHT");
-  }
-  
-  // If both sensors detected gestures simultaneously
-  if (left_gesture != DIR_NONE && left_gesture != -1 && 
-      right_gesture != DIR_NONE && right_gesture != -1) {
-    Serial.println(">>> SIMULTANEOUS GESTURES DETECTED <<<");
-  }
+  while (true) {
+    int left_gesture = DIR_NONE;
+    int right_gesture = DIR_NONE;
+    
+    // read gestures from sensors
+    if (left_apds.isGestureAvailable()) {
+      left_gesture = readGestureNonBlocking(left_apds);
+      
+      // trigger state change on NEAR or FAR, with debounce
+      if ((left_gesture == DIR_NEAR || left_gesture == DIR_FAR) && 
+          (millis() - lastStateChange > STATE_CHANGE_DEBOUNCE)
+        ) {
+        Serial.println(">>> LEFT: NEAR/FAR detected - changing state <<<");
+        advanceControlState();
+        lastStateChange = millis();
+        left_gesture = DIR_NONE;
+      } else if (left_gesture == DIR_NEAR || left_gesture == DIR_FAR) {
+        left_gesture = DIR_NONE; // ignore if too soon
+      }
+      
+      if ((left_gesture != DIR_NONE) && (left_gesture != -1)
+        ) {
+        GestureEvent event = {left_gesture, true};
+        xQueueSend(gestureQueue, &event, 0);
+        handleGesture(left_gesture, "LEFT");
+      }
+    }
+    
+    if (right_apds.isGestureAvailable()) {
+      right_gesture = readGestureNonBlocking(right_apds);
 
-  delay(10);
+      // trigger state change on NEAR or FAR (with debounce)
+      if ((right_gesture == DIR_NEAR || right_gesture == DIR_FAR) && 
+          (millis() - lastStateChange > STATE_CHANGE_DEBOUNCE)) {
+        Serial.println(">>> RIGHT: NEAR/FAR detected - changing state <<<");
+        advanceControlState();
+        lastStateChange = millis();
+        right_gesture = DIR_NONE;
+      } else if (right_gesture == DIR_NEAR || right_gesture == DIR_FAR) {
+        right_gesture = DIR_NONE;
+      }
+      
+      if (right_gesture != DIR_NONE && right_gesture != -1) {
+        GestureEvent event = {right_gesture, false};
+        xQueueSend(gestureQueue, &event, 0);
+        handleGesture(right_gesture, "RIGHT");
+      }
+    }
+    
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
+// Task 2: control servos (core 1)
+void servoTask(void *parameter) {
+  GestureEvent event;
+  
+  while (true) {
+    if (xQueueReceive(gestureQueue, &event, pdMS_TO_TICKS(10)) == pdTRUE) {
+      
+      // handle gesture based on current state
+      switch (control_state) {
+        case STATE_DIRECT:
+          handleDirectGesture(event);
+          break;
+          
+        case STATE_SELECT_SERVO:
+          handleSelectionGesture(event.gesture);
+          break;
+          
+        case STATE_ADJUST_SERVO:
+          handleAdjustGesture(event.gesture);
+          break;
+      }
+
+      // flush queue
+      int flushed = 0;
+      while (xQueueReceive(gestureQueue, &event, 0) == pdTRUE) {
+        flushed++;
+      }
+      if (flushed > 0) {
+        Serial.printf("Flushed %d queued gestures\n", flushed);
+      }
+    }
+    
+    vTaskDelay(pdMS_TO_TICKS(20));
+  }
+}
+
+void advanceControlState() {
+  // clear gesture queue when changing states
+  xQueueReset(gestureQueue);
+  
+  switch (control_state) {
+    case STATE_DIRECT:
+      control_state = STATE_SELECT_SERVO;
+      selected_servo_index = 0;
+      Serial.println("\n========================================");
+      Serial.println("MODE: SERVO SELECTION");
+      Serial.println("Swipe UP/DOWN to select servo");
+      Serial.println("========================================");
+      announceSelectedServo();
+      break;
+      
+    case STATE_SELECT_SERVO:
+      control_state = STATE_ADJUST_SERVO;
+      Serial.println("\n========================================");
+      Serial.printf("MODE: ADJUSTING %s SERVO\n", servoLabels[selected_servo_index]);
+      Serial.println("Swipe UP/DOWN to move servo");
+      Serial.println("========================================");
+      break;
+      
+    case STATE_ADJUST_SERVO:
+    default:
+      control_state = STATE_DIRECT;
+      selected_servo_index = -1;
+      Serial.println("\n========================================");
+      Serial.println("MODE: DIRECT CONTROL");
+      Serial.println("Gestures control the arm");
+      Serial.println("========================================");
+      break;
+  }
+}
+
+void announceSelectedServo() {
+  if (selected_servo_index < 0 || selected_servo_index >= SERVO_COUNT) return;
+  
+  Serial.printf(">>> Selected: [%d] %s @ %d° <<<\n",
+                selected_servo_index,
+                servoLabels[selected_servo_index],
+                servoRefs[selected_servo_index]->get_current_angle());
+}
+
+void handleDirectGesture(const GestureEvent& event) {
+  if (!event.isLeft) { // right sensor
+    if (event.gesture == DIR_LEFT) {
+      moveHorizontalArm("UP");
+    } else if (event.gesture == DIR_RIGHT) {
+      moveHorizontalArm("DOWN");
+    }
+  } else { // left sensor
+    if (event.gesture == DIR_LEFT) {
+      moveHorizontalArm("DOWN");
+    } else if (event.gesture == DIR_RIGHT) {
+      moveHorizontalArm("UP");
+    }
+  }
+}
+
+void handleSelectionGesture(int gesture) {
+  if (gesture == DIR_UP) {
+    selected_servo_index = (selected_servo_index - 1 + SERVO_COUNT) % SERVO_COUNT;
+    announceSelectedServo();
+  } else if (gesture == DIR_DOWN) {
+    selected_servo_index = (selected_servo_index + 1) % SERVO_COUNT;
+    announceSelectedServo();
+  }
+}
+
+void handleAdjustGesture(int gesture) {
+  if (selected_servo_index < 0 || selected_servo_index >= SERVO_COUNT) return;
+  
+  ServoController* servo = servoRefs[selected_servo_index];
+  int current = servo->get_current_angle();
+
+  if (gesture == DIR_UP) {
+    servo->safe_servo_write(current + SERVO_STEP_DEGREES);
+    Serial.printf("%s: %d° -> %d°\n",
+                  servoLabels[selected_servo_index],
+                  current,
+                  servo->get_current_angle());
+  } else if (gesture == DIR_DOWN) {
+    servo->safe_servo_write(current - SERVO_STEP_DEGREES);
+    Serial.printf("%s: %d° -> %d°\n",
+                  servoLabels[selected_servo_index],
+                  current,
+                  servo->get_current_angle());
+  }
 }
 
 void apdsInitialization() {
   I2C_left.begin(LEFT_SDA_PIN, LEFT_SCL_PIN, 100000);
   I2C_right.begin(RIGHT_SDA_PIN, RIGHT_SCL_PIN, 100000);
+  
+  I2C_left.setTimeout(50);
+  I2C_right.setTimeout(50);
 
   if (left_apds.init()) Serial.println("Left sensor initialized");
   else Serial.println("Left sensor failed");
 
   if (right_apds.init()) Serial.println("Right sensor initialized");
   else Serial.println("Right sensor failed");
+
+  left_apds.setGestureGain(GGAIN_4X);
+  left_apds.setGestureLEDDrive(LED_DRIVE_50MA);
+  left_apds.setProximityGain(PGAIN_4X);
+  left_apds.setGestureEnterThresh(40);
+  left_apds.setGestureExitThresh(30);
+
+  right_apds.setGestureGain(GGAIN_4X);
+  right_apds.setGestureLEDDrive(LED_DRIVE_50MA);
+  right_apds.setProximityGain(PGAIN_4X);
+  right_apds.setGestureEnterThresh(40);
+  right_apds.setGestureExitThresh(30);
+
+  if (left_apds.enableProximitySensor(false)) Serial.println("Left proximity enabled");
+  else Serial.println("Left proximity failed");
+
+  if (right_apds.enableProximitySensor(false)) Serial.println("Right proximity enabled");
+  else Serial.println("Right proximity failed");
 
   if (left_apds.enableGestureSensor(true)) Serial.println("Left gesture enabled");
   else Serial.println("Left gesture failed");
@@ -105,6 +342,10 @@ void apdsInitialization() {
 }
 
 void handleGesture(int gesture, const char* sensor_name) {
+  if (gesture == DIR_NEAR || gesture == DIR_FAR) {
+    return;
+  }
+  
   Serial.print(sensor_name);
   Serial.print(": ");
   
@@ -121,38 +362,38 @@ void handleGesture(int gesture, const char* sensor_name) {
     case DIR_RIGHT:
       Serial.println("RIGHT");
       break;
-    case DIR_FAR:
-      Serial.println("FAR");
-      break;
-    case DIR_NEAR:
-      Serial.println("NEAR");
-      break;
     default:
-      Serial.println("unknown");
+      Serial.println("NONE");
   }
 }
 
 int readGestureNonBlocking(SparkFun_APDS9960& apds) {
-  unsigned long start = millis();
-  const unsigned long timeout = 100;
-  
-  while (millis() - start < timeout) {
-    if (apds.isGestureAvailable()) {
-      int gesture = apds.readGesture();
-      if (gesture != -1) {
-        return gesture;
-      }
-    }
-    delay(5);
-  }
-  
-  return DIR_NONE;
+  int gesture = apds.readGesture();
+  return (gesture == -1 || gesture == 0) ? DIR_NONE : gesture;
 }
 
 void servoInitialization() {
-  servo_base.attach(SIGNAL_PIN_SERVO_BASE, 1, true, 0, {0, 90});
+  servo_base.attach(SIGNAL_PIN_SERVO_BASE, 1, true, 0, {20, 90});
   servo_middle.attach(SIGNAL_PIN_SERVO_MIDDLE, 2, true, 0, {0, 90});
   servo_cross.attach(SIGNAL_PIN_SERVO_CROSS, 3, true, 0, {0, 180});
   servo_left.attach(SIGNAL_PIN_SERVO_LEFT, 4, true, 0, {0, 180});
-  servo_right.attach(SIGNAL_PIN_SERVO_RIGHT, 5, true, 0, {0, 180});
+  servo_right.attach(SIGNAL_PIN_SERVO_RIGHT, 5, true, 180, {0, 180});
+}
+
+void moveHorizontalArm(String direction) {
+  if (direction == "UP") {
+    servo_base.move_to("sin", 20);
+    servo_middle.move_to("sin", 0);
+    servo_cross.move_to("sin", 0);
+    servo_left.move_to("sin", 0);
+    servo_right.move_to("sin", 0);
+  }
+
+  if (direction == "DOWN") {
+    servo_base.move_to("cos", 90);
+    servo_middle.move_to("cos", 90);
+    servo_cross.move_to("cos", 180);
+    servo_left.move_to("cos", 180);
+    servo_right.move_to("cos", 180);
+  }
 }

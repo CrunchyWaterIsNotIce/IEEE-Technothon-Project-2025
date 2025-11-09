@@ -33,9 +33,17 @@ public:
      */
     int get_current_angle();
 
+    /**
+     * @brief   moves servo to angle with a set movement function
+     * @param[in]   angle: angle to move servo gear
+     * @returns none
+     */
+    void move_to(String type, int to_angle);
+
 private:
     Servo _servo;
 
+    int _tolerance = 2;
     int _signalPin;
     int _timerNum;
     int _currentAngle;

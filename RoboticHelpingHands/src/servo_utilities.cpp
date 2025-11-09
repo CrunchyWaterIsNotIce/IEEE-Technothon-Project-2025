@@ -1,5 +1,6 @@
 #include "servo_utilities.h"
 
+#include <math.h>
 #include <array>
 #include <Arduino.h>
 #include <ESP32Servo.h>
@@ -23,7 +24,7 @@ bool ServoController::attach(int pin, int timer, bool to_attach, int angle, std:
     _boundaries = boundary;
     
     if (timer >= 0) ESP32PWM::allocateTimer(timer);
-    _servo.setPeriodHertz(50); // standard 50hz servo
+    _servo.setPeriodHertz(100); // standard 50hz servo
     _servo.attach(pin, 500, 2500); // min-max 500us-2400us for SG90
 
     delay(15);
@@ -33,13 +34,57 @@ bool ServoController::attach(int pin, int timer, bool to_attach, int angle, std:
 }
 
 void ServoController::safe_servo_write(int angle) {
-    if (_isAttached) {
-        _currentAngle = constrain(angle, _boundaries[0], _boundaries[1]);
+    if (!_isAttached) return;
+    int constrained = constrain(angle, _boundaries[0], _boundaries[1]);
+    
+    if (abs(constrained - _currentAngle) >= _tolerance) {
+        _currentAngle = constrained;
         _servo.write(_currentAngle);
     }
 }
 
 int ServoController::get_current_angle() {
-    if (_isAttached) return _currentAngle;
-    return -1;
+    if (!_isAttached) return -1;
+    return _currentAngle;
+}
+
+void ServoController::move_to(String type, int to_angle) {
+    if (!_isAttached) return;
+    
+    int start_angle = get_current_angle();
+    int delta = to_angle - start_angle;
+    if (delta == 0) return; // at target
+    
+    int steps = 100;
+    int delay_ms = 10;
+    
+    if (type == "cos") {
+        for (int i = 0; i <= steps; i++) {
+            float t = (float)i / steps;
+            float ease = (1.0 - cos(t * PI)) / 2.0;
+            int new_angle = start_angle + (int)(delta * ease);
+            safe_servo_write(new_angle);
+            delay(delay_ms);
+        }
+    } 
+    else if (type == "sin") {
+        for (int i = 0; i <= steps; i++) {
+            float t = (float)i / steps;
+            float ease = sin(t * PI / 2.0);
+            int new_angle = start_angle + (int)(delta * ease);
+            safe_servo_write(new_angle);
+            delay(delay_ms);
+        }
+    }
+    else if (type == "linear") {
+        for (int i = 0; i <= steps; i++) {
+            float t = (float)i / steps;
+            int new_angle = start_angle + (int)(delta * t);
+            safe_servo_write(new_angle);
+            delay(delay_ms);
+        }
+    }
+    else {
+        safe_servo_write(to_angle);
+    }
 }
