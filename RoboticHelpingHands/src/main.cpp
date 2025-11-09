@@ -31,6 +31,28 @@ ServoController servo_cross;
 ServoController servo_left;
 ServoController servo_right;
 
+constexpr int SERVO_COUNT = 5;
+
+// RGB LED Properties
+#define LED_PIN_RED 23
+#define LED_PIN_GREEN 19
+#define LED_PIN_BLUE 18
+
+struct RGBColor {
+  uint8_t r, g, b;
+};
+
+const RGBColor servoColors[SERVO_COUNT] = {
+  {150, 0, 255},     // base is purple
+  {50, 232, 133},       // middle is green
+  {255, 190, 0},       // cross is orange
+  {0, 0, 255},       // left is blue
+  {255, 0, 0}        // right is red
+};
+
+const RGBColor COLOR_WHITE = {255, 255, 255};
+const float LED_BRIGHTNESS = 0.3; // 30%
+
 // Control state machine
 enum ControlState {
   STATE_DIRECT = 0,      // normal
@@ -41,7 +63,7 @@ enum ControlState {
 volatile ControlState control_state = STATE_DIRECT;
 int selected_servo_index = -1;
 
-constexpr int SERVO_COUNT = 5;
+
 ServoController* servoRefs[SERVO_COUNT] = { &servo_base, &servo_middle, &servo_cross, &servo_left, &servo_right };
 const char* servoLabels[SERVO_COUNT] = { "BASE", "MIDDLE", "CROSS", "LEFT", "RIGHT" };
 const int SERVO_STEP_DEGREES = 5;
@@ -49,6 +71,7 @@ const int SERVO_STEP_DEGREES = 5;
 // Task handles
 TaskHandle_t gestureTaskHandle = NULL;
 TaskHandle_t servoTaskHandle = NULL;
+TaskHandle_t ledTaskHandle = NULL;
 
 // Gesture queue
 QueueHandle_t gestureQueue; 
@@ -60,6 +83,7 @@ struct GestureEvent {
 // Function Declarations
 void apdsInitialization();
 void servoInitialization();
+void ledInitialization();
 void handleGesture(int gesture, const char* sensor_name);
 int readGestureNonBlocking(SparkFun_APDS9960& apds);
 void moveHorizontalArm(String direction);
@@ -67,6 +91,11 @@ void moveHorizontalArm(String direction);
 // FreeRTOS Tasks
 void gestureTask(void *parameter);
 void servoTask(void *parameter);
+void ledTask(void *parameter); 
+
+// LED control functions
+void setRGBColor(RGBColor color);
+void setRGBColorPWM(uint8_t r, uint8_t g, uint8_t b);
 
 // State machine functions
 void advanceControlState();
@@ -81,6 +110,7 @@ void setup() {
   // queue for gesture events
   gestureQueue = xQueueCreate(1, sizeof(GestureEvent));
   
+  ledInitialization();
   apdsInitialization();
   servoInitialization();
 
@@ -97,7 +127,7 @@ void setup() {
     0
   );
   
-  // servo task on core 1 (lower priority)
+  // servo task on core 1
   xTaskCreatePinnedToCore(
     servoTask,
     "ServoTask",
@@ -107,10 +137,21 @@ void setup() {
     &servoTaskHandle,
     1
   );
+
+  // servo task on core 1 too
+  xTaskCreatePinnedToCore(
+    ledTask,
+    "LEDTask",
+    2048,
+    NULL,
+    1,
+    &ledTaskHandle,
+    1
+  );
   
   Serial.println("Initialized both APDS and Servo on separate cores.");
   Serial.println("\n=== CONTROL MODES ===");
-  Serial.println("DIRECT MODE: Swipe gestures control arm");
+  Serial.println("DIRECT MODE: White LED - Swipe gestures control arm");
   Serial.println("Cover both sensors: Enter servo selection mode");
 }
 
@@ -210,6 +251,71 @@ void servoTask(void *parameter) {
     
     vTaskDelay(pdMS_TO_TICKS(20));
   }
+}
+
+// Task 2: control LEDS (core 1)
+void ledTask(void *parameter) {
+  const unsigned long BLINK_INTERVAL = 500; // 500ms on/off
+  bool ledState = false;
+  unsigned long lastBlink = 0;
+  
+  while (true) {
+    unsigned long now = millis();
+    switch (control_state) {
+      case STATE_DIRECT:
+        // Solid white
+        setRGBColor(COLOR_WHITE);
+        break;
+        
+      case STATE_SELECT_SERVO:
+        // Blink selected servo color
+        if (now - lastBlink >= BLINK_INTERVAL) {
+          ledState = !ledState;
+          lastBlink = now;
+        }
+        
+        if (ledState && selected_servo_index >= 0 && selected_servo_index < SERVO_COUNT) {
+          setRGBColor(servoColors[selected_servo_index]);
+        } else {
+          setRGBColorPWM(0, 0, 0); // Off
+        }
+        break;
+        
+      case STATE_ADJUST_SERVO:
+        // Solid color for selected servo
+        if (selected_servo_index >= 0 && selected_servo_index < SERVO_COUNT) {
+          setRGBColor(servoColors[selected_servo_index]);
+        }
+        break;
+    }
+    
+    vTaskDelay(pdMS_TO_TICKS(50)); // Check every 50ms
+  }
+}
+
+void ledInitialization() {
+  ledcSetup(6, 5000, 8); // channel 6, 5kHz, 8-bit resolution
+  ledcSetup(7, 5000, 8); // channel 7
+  ledcSetup(8, 5000, 8); // channel 8
+  
+  ledcAttachPin(LED_PIN_RED, 6);
+  ledcAttachPin(LED_PIN_GREEN, 7);
+  ledcAttachPin(LED_PIN_BLUE, 8);
+  
+  // initial color
+  setRGBColor(COLOR_WHITE);
+  
+  Serial.println("RGB LED initialized");
+}
+
+void setRGBColor(RGBColor color) {
+  setRGBColorPWM(color.r, color.g, color.b);
+}
+
+void setRGBColorPWM(uint8_t r, uint8_t g, uint8_t b) {
+  ledcWrite(6, (uint8_t)(r * LED_BRIGHTNESS)); // red
+  ledcWrite(7, (uint8_t)(g * LED_BRIGHTNESS)); // green
+  ledcWrite(8, (uint8_t)(b * LED_BRIGHTNESS)); // blue
 }
 
 void advanceControlState() {
