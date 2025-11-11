@@ -9,7 +9,7 @@
 - 5x [SG90 Micro Servo Motors](https://www.amazon.com/dp/B07NSVKZP7?ref=ppx_yo2ov_dt_b_fed_asin_title) 
 - [Breadboarding Materials](https://www.amazon.com/dp/B073ZC68QG?ref=ppx_yo2ov_dt_b_fed_asin_title)
 - [External Power Supply](https://www.amazon.com/dp/B08BL4QMGM?ref=ppx_yo2ov_dt_b_fed_asin_title)
-
+- [3D Printed Components of Arm Structure](https://github.com/CrunchyWaterIsNotIce/IEEE-Technothon-Project-2025/tree/main/3D_Models)
 ## Libraries, APIs, and frameworks used
 
 | **Name** | **Purpose** |
@@ -33,14 +33,14 @@
   
 - **Cycling Through States** $\rightarrow$ (The LED should be blinking) **Swipe your hand left/ right** in front of one of the gesture sensors.
   
-- **Selecting a State** $\rightarrow$ Place your **hand in close proximity** to the gesture sensors then **swiftly pull your hand back**. The LED should stop blinking and become a static color indicating the selection chosen.
+- **Selecting a State** $\rightarrow$ Place your **finger in close proximity** to the gesture sensors then **swiftly pull your hand back**. The LED should stop blinking and become a static color indicating the selection chosen.
 
 ***
 
 3. **SELECTING AND MOVING A JOINT**
 - **Select Joint** $\rightarrow$ When in the Selecting Servo Joint state (Blinking LED), use the LEFT / RIGHT gestures to find the servo you want to control (indicated by the blinking color).
 
-- **Confirm Selection** $\rightarrow$ To lock onto that joint, hold your hand stationary in front of the sensor, then perform the quick pull back gesture.
+- **Confirm Selection** $\rightarrow$ To lock onto that joint, hold your finger stationary in front of the sensor, then perform the quick pull back gesture.
 
     The LED will stop blinking and become a static color, putting you in the Moving Servo Joint state.
 
@@ -60,4 +60,4 @@
 - @ChristinChi:
   - 
 - @CrunchyWaterIsNotIce:
-  - 
+  -
