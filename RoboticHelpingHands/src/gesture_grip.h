@@ -43,7 +43,6 @@ private:
 
     volatile ControlState _control_state;
     int _selected_servo_index;
-    const int _SERVO_STEP_DEGREES = 5;
 
     // Subsystem controllers
     GestureGripSensors _sensors;
@@ -53,16 +52,17 @@ private:
     TaskHandle_t _gestureTaskHandle;
     TaskHandle_t _servoTaskHandle;
     TaskHandle_t _ledTaskHandle;
+    TaskHandle_t _stabilizerTaskHandle;
     QueueHandle_t _gestureQueue;
 
     struct GestureEvent {
         int gesture;
-        bool isLeft;
     };
 
     // Timing control
     unsigned long _lastStateChange;
-    const unsigned long _STATE_CHANGE_DEBOUNCE = 1000;
+    static const int _STATE_CHANGE_DEBOUNCE = 1000;
+    static const int _SERVO_STEP_DEGREES = 3;  // small smoother, less harsh adjustments
 
     /**
      * @brief   FreeRTOS task for reading gestures
@@ -86,6 +86,13 @@ private:
     static void ledTaskWrapper(void* parameter);
 
     /**
+     * @brief   FreeRTOS task for stabilizing servos during adjustment
+     * @param[in]   parameter: pointer to GestureGrip instance
+     * @returns none
+     */
+    static void stabilizerTaskWrapper(void* parameter);
+
+    /**
      * @brief   Main gesture reading loop
      * @returns none
      */
@@ -102,6 +109,12 @@ private:
      * @returns none
      */
     void ledTask();
+
+    /**
+     * @brief   Stabilizer loop that locks servos during adjustment
+     * @returns none
+     */
+    void stabilizerTask();
 
     /**
      * @brief   Advances to next control state

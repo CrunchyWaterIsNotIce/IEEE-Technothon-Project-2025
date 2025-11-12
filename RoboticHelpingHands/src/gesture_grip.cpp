@@ -7,6 +7,7 @@ GestureGrip::GestureGrip() :
     _gestureTaskHandle(NULL),
     _servoTaskHandle(NULL),
     _ledTaskHandle(NULL),
+    _stabilizerTaskHandle(NULL),
     _gestureQueue(NULL),
     _lastStateChange(0)
 {}
@@ -19,6 +20,23 @@ bool GestureGrip::initialize() {
         Serial.println("Failed to initialize joints!");
         return false;
     }
+    
+    Serial.println("Waiting for servo power stabilization...");
+    delay(500);  // half second for servos to stabilize
+    Serial.println("Moving to upright position...");
+    _joints.moveToUpright(3);
+    
+    // Wait for all servos to finish moving
+    if (!_joints.waitForServos(8000)) {
+        Serial.println("WARNING: Some servos may not have reached target position");
+    }
+    
+    // Stop all movement tasks after initialization completes
+    Serial.println("Stopping initialization tasks...");
+    _joints.stopAllMovements();
+    delay(100);  // small delay to ensure tasks are killed
+    
+    Serial.println("✓ Arm erected and stabilized");
     
     // Initialize sensors second
     if (!_sensors.initialize()) {
@@ -75,6 +93,17 @@ void GestureGrip::start() {
         1
     );
 
+    // Create stabilizer task on core 1 (low priority)
+    xTaskCreatePinnedToCore(
+        stabilizerTaskWrapper,
+        "StabilizerTask",
+        2048,
+        this,
+        0,
+        &_stabilizerTaskHandle,
+        1
+    );
+
     Serial.println("Initialized both APDS and Servo on separate cores.");
     Serial.println("\n=== CONTROL MODES ===");
     Serial.println("DIRECT MODE: White LED - Swipe gestures control arm");
@@ -100,6 +129,11 @@ void GestureGrip::ledTaskWrapper(void* parameter) {
     grip->ledTask();
 }
 
+void GestureGrip::stabilizerTaskWrapper(void* parameter) {
+    GestureGrip* grip = static_cast<GestureGrip*>(parameter);
+    grip->stabilizerTask();
+}
+
 void GestureGrip::gestureTask() {
     vTaskDelay(pdMS_TO_TICKS(2000)); // wait 2 seconds before starting gesture detection
     
@@ -109,23 +143,17 @@ void GestureGrip::gestureTask() {
         int left_gesture = DIR_NONE;
         int right_gesture = DIR_NONE;
         
-        // Left sensor
+        // Left Sensor
         if (_sensors.leftGestureAvailable()) {
             left_gesture = _sensors.readLeftGesture();
             
-            // Check for state change trigger; NEAR or FAR
             if (left_gesture == DIR_NEAR || left_gesture == DIR_FAR) {
-                if (millis() - _lastStateChange > _STATE_CHANGE_DEBOUNCE) {
-                    Serial.println(">>> LEFT: NEAR/FAR detected - changing state <<<");
-                    advanceControlState();
-                    _lastStateChange = millis();
-                }
-                left_gesture = DIR_NONE; // always clear the NEAR or FAR
+                left_gesture = DIR_NONE;
             }
             
-            // Send gesture to queue ONLY if valid
+            // Send gesture to queue ONLY if valid (UP/DOWN/LEFT/RIGHT)
             if (left_gesture != DIR_NONE && left_gesture != -1) {
-                GestureEvent event = {left_gesture, true};
+                GestureEvent event = {left_gesture};
                 xQueueSend(_gestureQueue, &event, 0);
                 handleGesture(left_gesture, "LEFT");
             }
@@ -133,25 +161,17 @@ void GestureGrip::gestureTask() {
         
         vTaskDelay(pdMS_TO_TICKS(20));
         
-        // Light sensor
+        // Right Sensor
         if (_sensors.rightGestureAvailable()) {
             right_gesture = _sensors.readRightGesture();
             
-            // Check for state change trigger; NEAR or FAR
+            // Only process NEAR/FAR for state changes
             if (right_gesture == DIR_NEAR || right_gesture == DIR_FAR) {
                 if (millis() - _lastStateChange > _STATE_CHANGE_DEBOUNCE) {
                     Serial.println(">>> RIGHT: NEAR/FAR detected - changing state <<<");
                     advanceControlState();
                     _lastStateChange = millis();
                 }
-                right_gesture = DIR_NONE; // always clear the NEAR or FAR
-            }
-            
-            // Send gesture to queue ONLY if valid
-            if (right_gesture != DIR_NONE && right_gesture != -1) {
-                GestureEvent event = {right_gesture, false};
-                xQueueSend(_gestureQueue, &event, 0);
-                handleGesture(right_gesture, "RIGHT");
             }
         }
         
@@ -184,7 +204,6 @@ void GestureGrip::servoTask() {
                     break;
             }
             
-            // Flushes queue
             int flushed = 0;
             while (xQueueReceive(_gestureQueue, &event, 0) == pdTRUE) {
                 flushed++;
@@ -202,6 +221,20 @@ void GestureGrip::ledTask() {
     while (true) {
         _joints.updateLED((int)_control_state, _selected_servo_index);
         vTaskDelay(pdMS_TO_TICKS(50));
+    }
+}
+
+void GestureGrip::stabilizerTask() {
+    while (true) {
+        // Only actively stabilize when in ADJUST_SERVO mode
+        if (_control_state == STATE_ADJUST_SERVO && _selected_servo_index >= 0) {
+            // Periodically lock other servos to prevent drift/jitter
+            _joints.lockOtherServos(_selected_servo_index);
+            vTaskDelay(pdMS_TO_TICKS(100));  // Lock every 100ms
+        } else {
+            // Not adjusting, so don't need to stabilize
+            vTaskDelay(pdMS_TO_TICKS(500));
+        }
     }
 }
 
@@ -226,6 +259,10 @@ void GestureGrip::advanceControlState() {
             Serial.printf("MODE: ADJUSTING %s SERVO\n", _joints.getServoLabel(_selected_servo_index));
             Serial.println("Swipe UP/DOWN to move servo");
             Serial.println("========================================");
+            
+            // Lock all other servos when entering adjust mode
+            Serial.println("🔒 Locking other servos in place...");
+            _joints.lockOtherServos(_selected_servo_index);
             break;
             
         case STATE_ADJUST_SERVO:
@@ -250,18 +287,11 @@ void GestureGrip::announceSelectedServo() {
 }
 
 void GestureGrip::handleDirectGesture(const GestureEvent& event) {
-    if (!event.isLeft) { // Right sensor
-        if (event.gesture == DIR_LEFT) {
-            _joints.moveToUpright();
-        } else if (event.gesture == DIR_RIGHT) {
-            _joints.moveToDownward();
-        }
-    } else { // Left sensor
-        if (event.gesture == DIR_LEFT) {
-            _joints.moveToDownward();
-        } else if (event.gesture == DIR_RIGHT) {
-            _joints.moveToUpright();
-        }
+    // Only LEFT sensor sends gestures, so all gestures are from left sensor
+    if (event.gesture == DIR_LEFT) {
+        _joints.moveToDownward(1);
+    } else if (event.gesture == DIR_RIGHT) {
+        _joints.moveToUpright(1);
     }
 }
 

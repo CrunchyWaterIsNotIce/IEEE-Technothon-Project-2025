@@ -4,6 +4,13 @@
 #include <array>
 #include <Arduino.h>
 #include <ESP32Servo.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
+struct ServoLimits {
+    int min_angle;
+    int max_angle;
+};
 
 class ServoController {
 public:
@@ -33,22 +40,44 @@ public:
      */
     int get_current_angle();
 
+    
     /**
-     * @brief   moves servo to angle with a set movement function
-     * @param[in]   angle: angle to move servo gear
+     * @brief   gets if the current servo is moving
+     * @returns boolean of moving servo
+     */
+    bool get_is_moving();
+    
+    /**
+     * @brief   moves servo to target angle with easing
+     * @param[in]   type: easing type ("sin", "cos", "linear")
+     * @param[in]   to_angle: target angle
+     * @param[in]   steps_per_degree: subdivisions per degree (default 1, higher = smoother)
      * @returns none
      */
-    void move_to(String type, int to_angle);
+    void move_to(const char* type, int to_angle, int steps_per_degree = 1);
+    
+
+    /**
+     * @brief   stops all joint movement of servos
+     * @returns none
+     */
+    void stop_movement();
 
 private:
     Servo _servo;
-
-    int _tolerance = 2;
     int _signalPin;
     int _timerNum;
     int _currentAngle;
     bool _isAttached;
     std::array<int, 2> _boundaries;
+    static constexpr int _tolerance = 3;
+    static constexpr int _movement_deadzone = 5;
+    
+    TaskHandle_t _moveTaskHandle;
+    bool _is_moving;
+    
+    static void moveTaskWrapper(void* parameter);
+    void moveTask(int target_angle, const char* easing_type, int steps_per_degree);
 };
 
 #endif

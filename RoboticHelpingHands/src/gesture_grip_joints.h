@@ -19,23 +19,38 @@ public:
 
     /**
      * @brief   moves entire arm to upright position
+     * @param[in]   steps_per_degree: steps per degree
      * @returns none
      */
-    void moveToUpright();
+    void moveToUpright(int steps_per_degree);
 
     /**
      * @brief   moves entire arm to downward position
+     * @param[in]   steps_per_degree: steps per degree
      * @returns none
      */
-    void moveToDownward();
+    void moveToDownward(int steps_per_degree);
 
     /**
-     * @brief   adjusts selected servo by angle increment
-     * @param[in]   servo_index: index of servo to adjust from 0 to 4
-     * @param[in]   increment: degrees to add
+     * @brief   stops all servo movements
+     * @returns none
+     */
+    void stopAllMovements();
+
+    /**
+     * @brief   adjusts a specific servo by increment
+     * @param[in]   servo_index: index of servo from 0 to 4
+     * @param[in]   increment: degrees to adjust (positive or negative)
      * @returns none
      */
     void adjustServo(int servo_index, int increment);
+
+    /**
+     * @brief   locks all servos except the specified one at their current position
+     * @param[in]   servo_index: index of servo to NOT lock (-1 to lock all)
+     * @returns none
+     */
+    void lockOtherServos(int servo_index);
 
     /**
      * @brief   gets current angle of specified servo
@@ -64,36 +79,38 @@ public:
      * @returns servo count
      */
     int getServoCount() const { return _SERVO_COUNT; }
+
+    /**
+     * @brief   Wait for all servos to reach their target positions
+     * @param[in]   timeout_ms: maximum time to wait in milliseconds
+     * @returns true if all servos reached target, false if timeout
+     */
+    bool waitForServos(unsigned long timeout_ms = 10000);
     
 
 private:
     static const int _SERVO_COUNT = 5;
 
-    // Servo controllers
     ServoController _servo_base;
     ServoController _servo_middle;
     ServoController _servo_cross;
     ServoController _servo_left;
     ServoController _servo_right;
 
-    // Servo pin definitions
-    const int _PIN_BASE = 27;
-    const int _PIN_MIDDLE = 26;
-    const int _PIN_CROSS = 25;
-    const int _PIN_LEFT = 33;
-    const int _PIN_RIGHT = 32;
+    static constexpr int _PIN_BASE = 14;
+    static constexpr int _PIN_MIDDLE = 26;
+    static constexpr int _PIN_CROSS = 25;
+    static constexpr int _PIN_LEFT = 33;
+    static constexpr int _PIN_RIGHT = 32;
 
-    // RGB LED pins
     const int _LED_PIN_RED = 23;
     const int _LED_PIN_GREEN = 19;
     const int _LED_PIN_BLUE = 18;
     const float _LED_BRIGHTNESS = 0.3;
 
-    // Servo reference array
     ServoController* _servoRefs[5];
     const char* _servoLabels[5] = {"BASE", "MIDDLE", "CROSS", "LEFT", "RIGHT"};
 
-    // RGB color definitions
     struct RGBColor {
         uint8_t r, g, b;
     };
@@ -108,7 +125,6 @@ private:
 
     const RGBColor _COLOR_WHITE = {255, 255, 255};
 
-    // LED state tracking
     bool _ledState;
     unsigned long _lastBlink;
     const unsigned long _BLINK_INTERVAL = 500;
