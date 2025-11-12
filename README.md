@@ -17,6 +17,7 @@
 | **PlatformIO** | Cross-platform build system used with the Arduino IDE |
 | **ESP32Servo** | Library for driving the SG90 servo motors efficiently on the ESP32 |
 | **SparkFun_APDS9960** | Library for reading data from the gesture sensors |
+| **FreeRTOS** | Manages parallel functions between servo movement and gesture reading |
 | **Solidworks** | Used for 3D modeling the custom arm and base components |
 
 ## Setup instructions
@@ -31,22 +32,22 @@
 2. **STATE CONTROL (Switching Modes)**
 - The Gesture-Grip has two main operating modes (Presets $\rightarrow$ Selecting/Moving Servo Joint):
   
-- **Cycling Through States** $\rightarrow$ (The LED should be blinking) **Swipe your hand left/ right** in front of one of the gesture sensors.
+- **Cycling Through States** $\rightarrow$ (The LED should be blinking) **Swipe your hand left/ right** in front of the LEFT sensor.
   
-- **Selecting a State** $\rightarrow$ Place your **finger in close proximity** to the gesture sensors then **swiftly pull your hand back**. The LED should stop blinking and become a static color indicating the selection chosen.
+- **Selecting a State** $\rightarrow$ Place your **finger in close proximity** to the RIGHT gesture sensor then **swiftly pull your hand back**. The LED should stop blinking and become a static color indicating the selection chosen.
 
 ***
 
 3. **SELECTING AND MOVING A JOINT**
-- **Select Joint** $\rightarrow$ When in the Selecting Servo Joint state (Blinking LED), use the LEFT / RIGHT gestures to find the servo you want to control (indicated by the blinking color).
+- **Select Joint** $\rightarrow$ When in the Selecting Servo Joint state (Blinking LED), swipe left or right in front of the LEFT sensor to find the servo you want to control (indicated by the blinking color).
 
-- **Confirm Selection** $\rightarrow$ To lock onto that joint, hold your finger stationary in front of the sensor, then perform the quick pull back gesture.
+- **Confirm Selection** $\rightarrow$ To lock onto that joint, hold your finger stationary in front of RIGHT sensor, then perform the quick pull back gesture.
 
     The LED will stop blinking and become a static color, putting you in the Moving Servo Joint state.
 
-- **Move Joint** $\rightarrow$ Use the LEFT / RIGHT gestures to make precise angular adjustments to the selected joint.
+- **Move Joint** $\rightarrow$ Swipe left or right in the front of the LEFT sensor to make precise angular adjustments to the selected joint.
 
-- To switch back to another mode, perform the quick pull back gesture again (The LED should start blinking again).
+- To switch back to another mode, perform the quick pull back towards the RIGHT sensor again (The LED should start blinking again).
 
 ***
 
