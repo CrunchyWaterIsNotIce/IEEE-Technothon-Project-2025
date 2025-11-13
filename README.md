@@ -1,8 +1,13 @@
-# Gesture-Grip (IEEE-Technothon Project 2025)
+> IEEE-Technothon-Project-2025
+# Gesture-Grip
 
 ## Project overview
   The Gesture-Grip allows for **touchless control and seamlessly integrates itself into the user's workflow**. Instead of interrupting work to manually adjust each arm and position of a suboptimal helping hand, the user can simply swipe towards the Gesture-Grip which provides **precise, stable, and hands-free positioning** for delicate components, wires, and PCBs, letting the user keep their tools in hand for a faster, more efficient, and less frustrating workflow. There are **3 settings built into the Gesture-Grip** and each of the setting states are indicated by a singular RGB led housed on the base.
-  
+
+<p align="center">
+  <img src="https://github.com/CrunchyWaterIsNotIce/IEEE-Technothon-Project-2025/blob/main/3D_Models/coverforproject.jpg" width="650" height="650"/>
+</p>
+
 ## Hardware components used
 - 1x [ESP-WROOM-32](https://www.amazon.com/dp/B08D5ZD528?ref=ppx_yo2ov_dt_b_fed_asin_title&th=1)
 - 2x [APDS-9960 Gesture Sensor Modules](https://www.amazon.com/dp/B01NACU412?ref=ppx_yo2ov_dt_b_fed_asin_title)
@@ -59,15 +64,15 @@
 
 ## Team members and roles
 
-- @ChristinChi:
+- **@ChristinChi**:
   - Contributed to the initial design by drafting concept sketches and carefully measuring components. The goal was to create a solid foundation for the CAD model and help ensure all parts would function together smoothly.
   - Handled all the 3D modeling for the 'Gesture-Grip' in Solidworks, accurately translating the team's concept sketches into a detailed, multi-part assembly ready for fabrication.
   - Led the physical assembly and iterative testing, identifying and resolving mechanical fit issues, and refining the CAD models to improve the arm's stability and range of motion.
   - Maintained the project's documentation on Github and Devpost by clearly explaining the project's goals and outcomes.
-- @CrunchyWaterIsNotIce:
+- **@CrunchyWaterIsNotIce**:
   - Spearheaded the direction of the overall lead of the project.
   - Initiated the whole software and hardware design of 'Gesture-Grip' through coordinated research and deployment of knowledge using the libraries and frameworks listed above.
   - Architected the complete software state machine, using FreeRTOS to manage concurrent tasks for real-time gesture reading and smooth, precise servo control, ensuring the system was responsive and intuitive.
   - Strategically selected hardware and software that met real-time performance goals and fit within a manageable implementation timeline, which prevented over-complication and allowed for thorough work.
-- Chiikabu:
+- **Chiikabu**:
   - Looked cute.
