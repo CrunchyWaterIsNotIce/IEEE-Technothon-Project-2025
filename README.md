@@ -47,7 +47,7 @@
 
 - **Move Joint** $\rightarrow$ Swipe left or right in the front of the LEFT sensor to make precise angular adjustments to the selected joint.
 
-- To switch back to another mode, perform the quick pull back towards the RIGHT sensor again (The LED should start blinking again).
+    To switch back to another mode, perform the quick pull back towards the RIGHT sensor again (The LED should start blinking again).
 
 ***
 
@@ -58,7 +58,16 @@
 | Moving Servo Joint (Static Respective Color)	| LEFT / RIGHT	| Adjusts the angle of the currently selected servo joint. |
 
 ## Team members and roles
+
 - @ChristinChi:
-  - 
+  - Contributed to the initial design by drafting concept sketches and carefully measuring components. The goal was to create a solid foundation for the CAD model and help ensure all parts would function together smoothly.
+  - Handled all the 3D modeling for the 'Gesture-Grip' in Solidworks, accurately translating the team's concept sketches into a detailed, multi-part assembly ready for fabrication.
+  - Led the physical assembly and iterative testing, identifying and resolving mechanical fit issues, and refining the CAD models to improve the arm's stability and range of motion.
+  - Maintained the project's documentation on Github and Devpost by clearly explaining the project's goals and outcomes.
 - @CrunchyWaterIsNotIce:
-  -
+  - Spearheaded the direction of the overall lead of the project.
+  - Initiated the whole software and hardware design of 'Gesture-Grip' through coordinated research and deployment of knowledge using the libraries and frameworks listed above.
+  - Architected the complete software state machine, using FreeRTOS to manage concurrent tasks for real-time gesture reading and smooth, precise servo control, ensuring the system was responsive and intuitive.
+  - Strategically selected hardware and software that met real-time performance goals and fit within a manageable implementation timeline, which prevented over-complication and allowed for thorough work.
+- Chiikabu:
+  - Looked cute.
