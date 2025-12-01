@@ -1,4 +1,4 @@
-> IEEE-Technothon-Project-2025
+> IEEE-Technothon-Project-2025; 1st Place Winner
 # Gesture-Grip
 
 ## Project overview
